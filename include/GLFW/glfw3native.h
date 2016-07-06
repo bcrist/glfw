@@ -164,6 +164,36 @@ GLFWAPI const char* glfwGetWin32Monitor(GLFWmonitor* monitor);
  *  @ingroup native
  */
 GLFWAPI HWND glfwGetWin32Window(GLFWwindow* window);
+
+/*! @brief Sets the WindowProc callback used for all GLFW windows.
+ *
+ *  @details This function allows intercepting messages sent to any
+ *  GLFW window, without needing to subclass individual windows after
+ *  they are created and use CallWindowProc.  When using a custom
+ *  WindowProc callback, glfwHandleWin32Message should be used wherever
+ *  DefWindowProc would normally be used.  Note glfwSetDefaultWin32WindowProc
+ *  must be called before glfwInit!
+ *
+ *  @thread_safety This function may be called from any thread.  Access is not
+ *  synchronized.
+ *
+ *  @ingroup native
+ */
+GLFWAPI void glfwSetDefaultWin32WindowProc(WNDPROC wndProc);
+
+/*! @brief Forwards a message to the GLFW WindowProc.
+ *
+ *  @details This function should only be used in conjunction with
+ *  glfwSetDefaultWin32WindowProc.  It can be called directly from
+ *  the custom WindowProc; CallWindowProc is not necessary.
+ *
+ *  @thread_safety This function may be called from any thread.  Access is not
+ *  synchronized.
+ *
+ *  @ingroup native
+ */
+GLFWAPI LRESULT CALLBACK glfwHandleWin32Message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
 #endif
 
 #if defined(GLFW_EXPOSE_NATIVE_WGL)

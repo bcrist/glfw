@@ -889,6 +889,8 @@ static void destroyWindow(_GLFWwindow* window)
 //////                       GLFW internal API                      //////
 //////////////////////////////////////////////////////////////////////////
 
+static WNDPROC defaultWindowProc = (WNDPROC) windowProc;
+
 // Registers the GLFW window class
 //
 GLFWbool _glfwRegisterWindowClassWin32(void)
@@ -898,7 +900,7 @@ GLFWbool _glfwRegisterWindowClassWin32(void)
     ZeroMemory(&wc, sizeof(wc));
     wc.cbSize        = sizeof(wc);
     wc.style         = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    wc.lpfnWndProc   = (WNDPROC) windowProc;
+    wc.lpfnWndProc   = defaultWindowProc;
     wc.hInstance     = GetModuleHandleW(NULL);
     wc.hCursor       = LoadCursorW(NULL, IDC_ARROW);
     wc.lpszClassName = _GLFW_WNDCLASSNAME;
@@ -1715,3 +1717,15 @@ GLFWAPI HWND glfwGetWin32Window(GLFWwindow* handle)
     return window->win32.handle;
 }
 
+GLFWAPI void glfwSetDefaultWin32WindowProc(WNDPROC wndProc)
+{
+   if (!_glfwInitialized)
+   {
+      defaultWindowProc = wndProc;
+   }
+}
+
+GLFWAPI LRESULT CALLBACK glfwHandleWin32Message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+   return windowProc(hWnd, uMsg, wParam, lParam);
+}
