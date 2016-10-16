@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.2 Win32 - www.glfw.org
+// GLFW 3.3 Win32 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
 // Copyright (c) 2006-2016 Camilla Berglund <elmindreda@glfw.org>
@@ -46,9 +46,11 @@ static DWORD getWindowStyle(const _GLFWwindow* window)
         style |= WS_POPUP;
     else
     {
+        style |= WS_SYSMENU | WS_MINIMIZEBOX;
+
         if (window->decorated)
         {
-            style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+            style |= WS_CAPTION;
 
             if (window->resizable)
                 style |= WS_MAXIMIZEBOX | WS_THICKFRAME;
@@ -385,7 +387,7 @@ static int translateKey(WPARAM wParam, LPARAM lParam)
         return _GLFW_KEY_INVALID;
     }
 
-    return _glfw.win32.publicKeys[HIWORD(lParam) & 0x1FF];
+    return _glfw.win32.keycodes[HIWORD(lParam) & 0x1FF];
 }
 
 // Make the specified window and its video mode active on its monitor
@@ -691,36 +693,33 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
 
         case WM_SIZE:
         {
-            const GLFWbool iconified =
-                !window->win32.iconified && wParam == SIZE_MINIMIZED;
-            const GLFWbool restored =
-                window->win32.iconified &&
-                (wParam == SIZE_RESTORED || wParam == SIZE_MAXIMIZED);
+            const GLFWbool iconified = wParam == SIZE_MINIMIZED;
+            const GLFWbool maximized = wParam == SIZE_MAXIMIZED ||
+                                       (window->win32.maximized &&
+                                        wParam != SIZE_RESTORED);
 
             if (_glfw.win32.disabledCursorWindow == window)
                 updateClipRect(window);
 
-            if (iconified)
-                _glfwInputWindowIconify(window, GLFW_TRUE);
-            else if (restored)
-                _glfwInputWindowIconify(window, GLFW_FALSE);
+            if (window->win32.iconified != iconified)
+                _glfwInputWindowIconify(window, iconified);
+
+            if (window->win32.maximized != maximized)
+                _glfwInputWindowMaximize(window, maximized);
 
             _glfwInputFramebufferSize(window, LOWORD(lParam), HIWORD(lParam));
             _glfwInputWindowSize(window, LOWORD(lParam), HIWORD(lParam));
 
-            if (iconified)
+            if (window->monitor && window->win32.iconified != iconified)
             {
-                window->win32.iconified = GLFW_TRUE;
-                if (window->monitor)
+                if (iconified)
                     releaseMonitor(window);
-            }
-            else if (restored)
-            {
-                window->win32.iconified = GLFW_FALSE;
-                if (window->monitor)
+                else
                     acquireMonitor(window);
             }
 
+            window->win32.iconified = iconified;
+            window->win32.maximized = maximized;
             return 0;
         }
 
@@ -850,9 +849,10 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
-// Creates the GLFW window and rendering context
+// Creates the GLFW window
 //
-static int createWindow(_GLFWwindow* window, const _GLFWwndconfig* wndconfig)
+static int createNativeWindow(_GLFWwindow* window,
+                              const _GLFWwndconfig* wndconfig)
 {
     int xpos, ypos, fullWidth, fullHeight;
     WCHAR* wideTitle;
@@ -988,18 +988,22 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
                               const _GLFWctxconfig* ctxconfig,
                               const _GLFWfbconfig* fbconfig)
 {
-    if (!createWindow(window, wndconfig))
+    if (!createNativeWindow(window, wndconfig))
         return GLFW_FALSE;
 
     if (ctxconfig->client != GLFW_NO_API)
     {
         if (ctxconfig->source == GLFW_NATIVE_CONTEXT_API)
         {
+            if (!_glfwInitWGL())
+                return GLFW_FALSE;
             if (!_glfwCreateContextWGL(window, ctxconfig, fbconfig))
                 return GLFW_FALSE;
         }
         else
         {
+            if (!_glfwInitEGL())
+                return GLFW_FALSE;
             if (!_glfwCreateContextEGL(window, ctxconfig, fbconfig))
                 return GLFW_FALSE;
         }
@@ -1023,7 +1027,7 @@ void _glfwPlatformDestroyWindow(_GLFWwindow* window)
     if (window->monitor)
         releaseMonitor(window);
 
-    if (window->context.client != GLFW_NO_API)
+    if (window->context.destroy)
         window->context.destroy(window);
 
     if (_glfw.win32.disabledCursorWindow == window)
@@ -1429,8 +1433,7 @@ void _glfwPlatformWaitEventsTimeout(double timeout)
 
 void _glfwPlatformPostEmptyEvent(void)
 {
-    _GLFWwindow* window = _glfw.windowListHead;
-    PostMessage(window->win32.handle, WM_NULL, 0, 0);
+    PostMessage(_glfw.win32.helperWindowHandle, WM_NULL, 0, 0);
 }
 
 void _glfwPlatformGetCursorPos(_GLFWwindow* window, double* xpos, double* ypos)
@@ -1489,9 +1492,9 @@ const char* _glfwPlatformGetKeyName(int key, int scancode)
     WCHAR name[16];
 
     if (key != GLFW_KEY_UNKNOWN)
-        scancode = _glfw.win32.nativeKeys[key];
+        scancode = _glfw.win32.scancodes[key];
 
-    if (!_glfwIsPrintable(_glfw.win32.publicKeys[scancode]))
+    if (!_glfwIsPrintable(_glfw.win32.keycodes[scancode]))
         return NULL;
 
     if (!GetKeyNameTextW(scancode << 16, name, sizeof(name) / sizeof(WCHAR)))
@@ -1506,6 +1509,11 @@ const char* _glfwPlatformGetKeyName(int key, int scancode)
     }
 
     return _glfw.win32.keyName;
+}
+
+int _glfwPlatformGetKeyScancode(int key)
+{
+    return _glfw.win32.scancodes[key];
 }
 
 int _glfwPlatformCreateCursor(_GLFWcursor* cursor,
@@ -1639,21 +1647,13 @@ const char* _glfwPlatformGetClipboardString(_GLFWwindow* window)
     return _glfw.win32.clipboardString;
 }
 
-char** _glfwPlatformGetRequiredInstanceExtensions(uint32_t* count)
+void _glfwPlatformGetRequiredInstanceExtensions(char** extensions)
 {
-    char** extensions;
+    if (!_glfw.vk.KHR_surface || !_glfw.vk.KHR_win32_surface)
+        return;
 
-    *count = 0;
-
-    if (!_glfw.vk.KHR_win32_surface)
-        return NULL;
-
-    extensions = calloc(2, sizeof(char*));
-    extensions[0] = strdup("VK_KHR_surface");
-    extensions[1] = strdup("VK_KHR_win32_surface");
-
-    *count = 2;
-    return extensions;
+    extensions[0] = "VK_KHR_surface";
+    extensions[1] = "VK_KHR_win32_surface";
 }
 
 int _glfwPlatformGetPhysicalDevicePresentationSupport(VkInstance instance,

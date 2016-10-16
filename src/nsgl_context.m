@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.2 OS X - www.glfw.org
+// GLFW 3.3 OS X - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2009-2016 Camilla Berglund <elmindreda@glfw.org>
 //
@@ -92,6 +92,9 @@ static void destroyContextNSGL(_GLFWwindow* window)
 //
 GLFWbool _glfwInitNSGL(void)
 {
+    if (_glfw.nsgl.framework)
+        return GLFW_TRUE;
+
     _glfw.nsgl.framework =
         CFBundleGetBundleWithIdentifier(CFSTR("com.apple.opengl"));
     if (_glfw.nsgl.framework == NULL)
@@ -222,7 +225,15 @@ GLFWbool _glfwCreateContextNSGL(_GLFWwindow* window,
         ADD_ATTR2(NSOpenGLPFAStencilSize, fbconfig->stencilBits);
 
     if (fbconfig->stereo)
+    {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 101200
+        _glfwInputError(GLFW_FORMAT_UNAVAILABLE,
+                        "NSGL: Stereo rendering is deprecated");
+        return GLFW_FALSE;
+#else
         ADD_ATTR(NSOpenGLPFAStereo);
+#endif
+    }
 
     if (fbconfig->doublebuffer)
         ADD_ATTR(NSOpenGLPFADoubleBuffer);

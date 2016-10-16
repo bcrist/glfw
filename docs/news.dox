@@ -2,6 +2,20 @@
 
 @page news New features
 
+@section news_33 New features in 3.3
+
+@subsection news_33_maximize Window maximization callback
+
+GLFW now supports window maximization notifications with @ref
+glfwSetWindowMaximizeCallback.
+
+
+@subsection news_33_keyscancode Platform-specific key scancode query
+
+GLFW now supports querying the platform dependent scancode of any key with
+@ref glfwGetKeyScancode.
+
+
 @section news_32 New features in 3.2
 
 
@@ -345,7 +359,7 @@ well as moving a window to a specific position before showing it.
 
 @subsection news_30_undecorated Undecorated windows
 
-Windowed mode windows can now be created without decorations, i.e. things like
+Windowed mode windows can now be created without decorations, e.g. things like
 a frame, a title bar, with the `GLFW_DECORATED` window hint.  This allows for
 the creation of things like splash screens.
 

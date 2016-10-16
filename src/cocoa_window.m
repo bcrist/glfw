@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.2 OS X - www.glfw.org
+// GLFW 3.3 OS X - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2009-2016 Camilla Berglund <elmindreda@glfw.org>
 //
@@ -32,6 +32,23 @@
 // Needed for _NSGetProgname
 #include <crt_externs.h>
 
+// HACK: The 10.12 SDK adds new symbols and immediately deprecates the old ones
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 101200
+ #define NSWindowStyleMaskBorderless NSBorderlessWindowMask
+ #define NSWindowStyleMaskClosable NSClosableWindowMask
+ #define NSWindowStyleMaskMiniaturizable NSMiniaturizableWindowMask
+ #define NSWindowStyleMaskResizable NSResizableWindowMask
+ #define NSWindowStyleMaskTitled NSTitledWindowMask
+ #define NSEventModifierFlagCommand NSCommandKeyMask
+ #define NSEventModifierFlagControl NSControlKeyMask
+ #define NSEventModifierFlagOption NSAlternateKeyMask
+ #define NSEventModifierFlagShift NSShiftKeyMask
+ #define NSEventModifierFlagDeviceIndependentFlagsMask NSDeviceIndependentModifierFlagsMask
+ #define NSEventMaskAny NSAnyEventMask
+ #define NSEventTypeApplicationDefined NSApplicationDefined
+ #define NSEventTypeKeyUp NSKeyUp
+#endif
+
 
 // Returns the specified standard cursor
 //
@@ -63,14 +80,15 @@ static NSUInteger getStyleMask(_GLFWwindow* window)
     NSUInteger styleMask = 0;
 
     if (window->monitor || !window->decorated)
-        styleMask |= NSBorderlessWindowMask;
+        styleMask |= NSWindowStyleMaskBorderless;
     else
     {
-        styleMask |= NSTitledWindowMask | NSClosableWindowMask |
-                     NSMiniaturizableWindowMask;
+        styleMask |= NSWindowStyleMaskTitled |
+                     NSWindowStyleMaskClosable |
+                     NSWindowStyleMaskMiniaturizable;
 
         if (window->resizable)
-            styleMask |= NSResizableWindowMask;
+            styleMask |= NSWindowStyleMaskResizable;
     }
 
     return styleMask;
@@ -150,13 +168,13 @@ static int translateFlags(NSUInteger flags)
 {
     int mods = 0;
 
-    if (flags & NSShiftKeyMask)
+    if (flags & NSEventModifierFlagShift)
         mods |= GLFW_MOD_SHIFT;
-    if (flags & NSControlKeyMask)
+    if (flags & NSEventModifierFlagControl)
         mods |= GLFW_MOD_CONTROL;
-    if (flags & NSAlternateKeyMask)
+    if (flags & NSEventModifierFlagOption)
         mods |= GLFW_MOD_ALT;
-    if (flags & NSCommandKeyMask)
+    if (flags & NSEventModifierFlagCommand)
         mods |= GLFW_MOD_SUPER;
 
     return mods;
@@ -166,10 +184,10 @@ static int translateFlags(NSUInteger flags)
 //
 static int translateKey(unsigned int key)
 {
-    if (key >= sizeof(_glfw.ns.publicKeys) / sizeof(_glfw.ns.publicKeys[0]))
+    if (key >= sizeof(_glfw.ns.keycodes) / sizeof(_glfw.ns.keycodes[0]))
         return GLFW_KEY_UNKNOWN;
 
-    return _glfw.ns.publicKeys[key];
+    return _glfw.ns.keycodes[key];
 }
 
 // Translate a GLFW keycode to a Cocoa modifier flag
@@ -180,16 +198,16 @@ static NSUInteger translateKeyToModifierFlag(int key)
     {
         case GLFW_KEY_LEFT_SHIFT:
         case GLFW_KEY_RIGHT_SHIFT:
-            return NSShiftKeyMask;
+            return NSEventModifierFlagShift;
         case GLFW_KEY_LEFT_CONTROL:
         case GLFW_KEY_RIGHT_CONTROL:
-            return NSControlKeyMask;
+            return NSEventModifierFlagControl;
         case GLFW_KEY_LEFT_ALT:
         case GLFW_KEY_RIGHT_ALT:
-            return NSAlternateKeyMask;
+            return NSEventModifierFlagOption;
         case GLFW_KEY_LEFT_SUPER:
         case GLFW_KEY_RIGHT_SUPER:
-            return NSCommandKeyMask;
+            return NSEventModifierFlagCommand;
     }
 
     return 0;
@@ -237,6 +255,13 @@ static const NSRange kEmptyRange = { NSNotFound, 0 };
 
     if (_glfw.ns.disabledCursorWindow == window)
         centerCursor(window);
+
+    const int maximized = [window->ns.object isZoomed];
+    if (window->ns.maximized != maximized)
+    {
+        window->ns.maximized = maximized;
+        _glfwInputWindowMaximize(window, maximized);
+    }
 
     const NSRect contentRect = [window->ns.view frame];
     const NSRect fbRect = [window->ns.view convertRectToBacking:contentRect];
@@ -558,7 +583,7 @@ static const NSRange kEmptyRange = { NSNotFound, 0 };
 {
     int action;
     const unsigned int modifierFlags =
-        [event modifierFlags] & NSDeviceIndependentModifierFlagsMask;
+        [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
     const int key = translateKey([event keyCode]);
     const int mods = translateFlags(modifierFlags);
     const NSUInteger keyFlag = translateKeyToModifierFlag(key);
@@ -753,7 +778,7 @@ static const NSRange kEmptyRange = { NSNotFound, 0 };
 
 - (BOOL)canBecomeKeyWindow
 {
-    // Required for NSBorderlessWindowMask windows
+    // Required for NSWindowStyleMaskBorderless windows
     return YES;
 }
 
@@ -774,8 +799,11 @@ static const NSRange kEmptyRange = { NSNotFound, 0 };
 // down the command key don't get sent to the key window.
 - (void)sendEvent:(NSEvent *)event
 {
-    if ([event type] == NSKeyUp && ([event modifierFlags] & NSCommandKeyMask))
+    if ([event type] == NSEventTypeKeyUp &&
+        ([event modifierFlags] & NSEventModifierFlagCommand))
+    {
         [[self keyWindow] sendEvent:event];
+    }
     else
         [super sendEvent:event];
 }
@@ -859,7 +887,7 @@ static void createMenuBar(void)
     [[appMenu addItemWithTitle:@"Hide Others"
                        action:@selector(hideOtherApplications:)
                 keyEquivalent:@"h"]
-        setKeyEquivalentModifierMask:NSAlternateKeyMask | NSCommandKeyMask];
+        setKeyEquivalentModifierMask:NSEventModifierFlagOption | NSEventModifierFlagCommand];
     [appMenu addItemWithTitle:@"Show All"
                        action:@selector(unhideAllApplications:)
                 keyEquivalent:@""];
@@ -891,7 +919,7 @@ static void createMenuBar(void)
     [[windowMenu addItemWithTitle:@"Enter Full Screen"
                            action:@selector(toggleFullScreen:)
                     keyEquivalent:@"f"]
-     setKeyEquivalentModifierMask:NSControlKeyMask | NSCommandKeyMask];
+     setKeyEquivalentModifierMask:NSEventModifierFlagControl | NSEventModifierFlagCommand];
 
     // Prior to Snow Leopard, we need to use this oddly-named semi-private API
     // to get the application menu working properly.
@@ -944,8 +972,8 @@ static GLFWbool initializeAppKit(void)
 
 // Create the Cocoa window
 //
-static GLFWbool createWindow(_GLFWwindow* window,
-                             const _GLFWwndconfig* wndconfig)
+static GLFWbool createNativeWindow(_GLFWwindow* window,
+                                   const _GLFWwndconfig* wndconfig)
 {
     window->ns.delegate = [[GLFWWindowDelegate alloc] initWithGlfwWindow:window];
     if (window->ns.delegate == nil)
@@ -1027,13 +1055,15 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
     if (!initializeAppKit())
         return GLFW_FALSE;
 
-    if (!createWindow(window, wndconfig))
+    if (!createNativeWindow(window, wndconfig))
         return GLFW_FALSE;
 
     if (ctxconfig->client != GLFW_NO_API)
     {
         if (ctxconfig->source == GLFW_NATIVE_CONTEXT_API)
         {
+            if (!_glfwInitNSGL())
+                return GLFW_FALSE;
             if (!_glfwCreateContextNSGL(window, ctxconfig, fbconfig))
                 return GLFW_FALSE;
         }
@@ -1067,7 +1097,7 @@ void _glfwPlatformDestroyWindow(_GLFWwindow* window)
     if (window->monitor)
         releaseMonitor(window);
 
-    if (window->context.client != GLFW_NO_API)
+    if (window->context.destroy)
         window->context.destroy(window);
 
     [window->ns.object setDelegate:nil];
@@ -1153,7 +1183,7 @@ void _glfwPlatformSetWindowSizeLimits(_GLFWwindow* window,
 void _glfwPlatformSetWindowAspectRatio(_GLFWwindow* window, int numer, int denom)
 {
     if (numer == GLFW_DONT_CARE || denom == GLFW_DONT_CARE)
-        [window->ns.object setContentAspectRatio:NSMakeSize(0, 0)];
+        [window->ns.object setResizeIncrements:NSMakeSize(1.0, 1.0)];
     else
         [window->ns.object setContentAspectRatio:NSMakeSize(numer, denom)];
 }
@@ -1349,7 +1379,7 @@ void _glfwPlatformPollEvents(void)
 {
     for (;;)
     {
-        NSEvent* event = [NSApp nextEventMatchingMask:NSAnyEventMask
+        NSEvent* event = [NSApp nextEventMatchingMask:NSEventMaskAny
                                             untilDate:[NSDate distantPast]
                                                inMode:NSDefaultRunLoopMode
                                               dequeue:YES];
@@ -1368,7 +1398,7 @@ void _glfwPlatformWaitEvents(void)
     // I wanted to pass NO to dequeue:, and rely on PollEvents to
     // dequeue and send.  For reasons not at all clear to me, passing
     // NO to dequeue: causes this method never to return.
-    NSEvent *event = [NSApp nextEventMatchingMask:NSAnyEventMask
+    NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
                                         untilDate:[NSDate distantFuture]
                                            inMode:NSDefaultRunLoopMode
                                           dequeue:YES];
@@ -1380,7 +1410,7 @@ void _glfwPlatformWaitEvents(void)
 void _glfwPlatformWaitEventsTimeout(double timeout)
 {
     NSDate* date = [NSDate dateWithTimeIntervalSinceNow:timeout];
-    NSEvent* event = [NSApp nextEventMatchingMask:NSAnyEventMask
+    NSEvent* event = [NSApp nextEventMatchingMask:NSEventMaskAny
                                         untilDate:date
                                            inMode:NSDefaultRunLoopMode
                                           dequeue:YES];
@@ -1393,7 +1423,7 @@ void _glfwPlatformWaitEventsTimeout(double timeout)
 void _glfwPlatformPostEmptyEvent(void)
 {
     NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
-    NSEvent* event = [NSEvent otherEventWithType:NSApplicationDefined
+    NSEvent* event = [NSEvent otherEventWithType:NSEventTypeApplicationDefined
                                         location:NSMakePoint(0, 0)
                                    modifierFlags:0
                                        timestamp:0
@@ -1470,9 +1500,9 @@ void _glfwPlatformSetCursorMode(_GLFWwindow* window, int mode)
 const char* _glfwPlatformGetKeyName(int key, int scancode)
 {
     if (key != GLFW_KEY_UNKNOWN)
-        scancode = _glfw.ns.nativeKeys[key];
+        scancode = _glfw.ns.scancodes[key];
 
-    if (!_glfwIsPrintable(_glfw.ns.publicKeys[scancode]))
+    if (!_glfwIsPrintable(_glfw.ns.keycodes[scancode]))
         return NULL;
 
     UInt32 deadKeyState = 0;
@@ -1509,6 +1539,11 @@ const char* _glfwPlatformGetKeyName(int key, int scancode)
     return _glfw.ns.keyName;
 }
 
+int _glfwPlatformGetKeyScancode(int key)
+{
+    return _glfw.ns.scancodes[key];
+}
+
 int _glfwPlatformCreateCursor(_GLFWcursor* cursor,
                               const GLFWimage* image,
                               int xhot, int yhot)
@@ -1538,7 +1573,7 @@ int _glfwPlatformCreateCursor(_GLFWcursor* cursor,
     memcpy([rep bitmapData], image->pixels, image->width * image->height * 4);
 
     native = [[NSImage alloc] initWithSize:NSMakeSize(image->width, image->height)];
-    [native addRepresentation: rep];
+    [native addRepresentation:rep];
 
     cursor->ns.object = [[NSCursor alloc] initWithImage:native
                                                 hotSpot:NSMakePoint(xhot, yhot)];
@@ -1616,10 +1651,8 @@ const char* _glfwPlatformGetClipboardString(_GLFWwindow* window)
     return _glfw.ns.clipboardString;
 }
 
-char** _glfwPlatformGetRequiredInstanceExtensions(uint32_t* count)
+void _glfwPlatformGetRequiredInstanceExtensions(char** extensions)
 {
-    *count = 0;
-    return NULL;
 }
 
 int _glfwPlatformGetPhysicalDevicePresentationSupport(VkInstance instance,
