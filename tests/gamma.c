@@ -1,6 +1,6 @@
 //========================================================================
 // Gamma correction test program
-// Copyright (c) Camilla Berglund <elmindreda@glfw.org>
+// Copyright (c) Camilla Löwy <elmindreda@glfw.org>
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
@@ -45,8 +45,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
-static int windowed_xpos, windowed_ypos, windowed_width, windowed_height;
 
 static void error_callback(int error, const char* description)
 {
@@ -118,7 +116,6 @@ int main(int argc, char** argv)
     while (!glfwWindowShouldClose(window))
     {
         int width, height;
-        struct nk_panel layout;
         struct nk_rect area;
 
         glfwGetWindowSize(window, &width, &height);
@@ -126,7 +123,7 @@ int main(int argc, char** argv)
 
         glClear(GL_COLOR_BUFFER_BIT);
         nk_glfw3_new_frame();
-        if (nk_begin(nk, &layout, "", area, 0))
+        if (nk_begin(nk, "", area, 0))
         {
             const GLFWgammaramp* ramp = glfwGetGammaRamp(monitor);
             nk_window_set_bounds(nk, area);

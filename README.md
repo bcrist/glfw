@@ -11,7 +11,7 @@ application development.  It provides a simple, platform-independent API for
 creating windows, contexts and surfaces, reading input, handling events, etc.
 
 GLFW is licensed under the [zlib/libpng
-license](https://opensource.org/licenses/Zlib).
+license](http://www.glfw.org/license.html).
 
 The latest stable release is version 3.2.1.
 
@@ -19,6 +19,8 @@ See the [downloads](http://www.glfw.org/download.html) page for details and
 files, or fetch the `latest` branch, which always points to the latest stable
 release.  Each release starting with 3.0 also has a corresponding [annotated
 tag](https://github.com/glfw/glfw/releases) with source and binary archives.
+The [version history](http://www.glfw.org/changelog.html) lists all user-visible
+changes for every release.
 
 This is a development branch for version 3.3, which is _not yet described_.
 
@@ -36,7 +38,7 @@ does not need the headers for any context creation API (WGL, GLX, EGL, NSGL) or
 rendering API (OpenGL, OpenGL ES, Vulkan) to enable support for them.
 
 GLFW supports compilation on Windows with Visual C++ 2010 and later, MinGW and
-MinGW-w64, on OS X with Clang and on Linux and other Unix-like systems with GCC
+MinGW-w64, on macOS with Clang and on Linux and other Unix-like systems with GCC
 and Clang.  It will likely compile in other environments as well, but this is
 not regularly tested.
 
@@ -81,6 +83,7 @@ located in the `deps/` directory.
  - [linmath.h](https://github.com/datenwolf/linmath.h) for linear algebra in
    examples
  - [Nuklear](https://github.com/vurtun/nuklear) for test and example UI
+ - [stb\_image\_write](https://github.com/nothings/stb) for writing images to disk
  - [Vulkan headers](https://www.khronos.org/registry/vulkan/) for Vulkan tests
 
 The Vulkan example additionally requires the Vulkan SDK to be installed, or it
@@ -104,12 +107,37 @@ information on what to include when reporting a bug.
   scancodes for keys (#830)
 - Added `glfwSetWindowMaximizeCallback` and `GLFWwindowmaximizefun` for
   receiving window maximization events (#778)
+- Added `glfwSetWindowAttrib` function for changing window attributes (#537)
+- Added headless [OSMesa](http://mesa3d.org/osmesa.html) backend (#281,#850)
+- Added definition of `GLAPIENTRY` to public header
+- Added macOS specific `GLFW_COCOA_RETINA_FRAMEBUFFER` window hint
+- Added macOS specific `GLFW_COCOA_FRAME_AUTOSAVE` window hint (#195)
+- Added `GLFW_INCLUDE_ES32` for including the OpenGL ES 3.2 header
+- Removed `GLFW_USE_RETINA` compile-time option
 - Bugfix: Calling `glfwMaximizeWindow` on a full screen window was not ignored
 - Bugfix: `GLFW_INCLUDE_VULKAN` could not be combined with the corresponding
           OpenGL and OpenGL ES header macros
+- Bugfix: `glfwGetInstanceProcAddress` returned `NULL` for
+          `vkGetInstanceProcAddr` when `_GLFW_VULKAN_STATIC` was enabled
+- Bugfix: Invalid library paths were used in test and example CMake files (#930)
+- [Win32] Added system error strings to relevant GLFW error descriptions (#733)
 - [Win32] Bugfix: Undecorated windows could not be iconified by the user (#861)
+- [Win32] Bugfix: Deadzone logic could underflow with some controllers (#910)
+- [Win32] Bugfix: Bitness test in `FindVulkan.cmake` was VS specific (#928)
+- [X11] Replaced `_GLFW_HAS_XF86VM` compile-time option with dynamic loading
+- [X11] Bugfix: `glfwGetVideoMode` would segfault on Cygwin/X
+- [Cocoa] Added support for Vulkan window surface creation via
+          [MoltenVK](https://moltengl.com/moltenvk/) (#870)
 - [Cocoa] Bugfix: Disabling window aspect ratio would assert (#852)
+- [Cocoa] Bugfix: Window creation failed to set first responder (#876,#883)
+- [Cocoa] Bugfix: Removed use of deprecated `CGDisplayIOServicePort` function
+                  (#165,#192,#508,#511)
+- [Cocoa] Bugfix: Disabled use of deprecated `CGDisplayModeCopyPixelEncoding`
+                  function on macOS 10.12+
+- [Cocoa] Bugfix: Running in AppSandbox would emit warnings (#816,#882)
+- [Cocoa] Bugfix: Windows created after the first were not cascaded (#195)
 - [EGL] Added support for `EGL_KHR_get_all_proc_addresses` (#871)
+- [EGL] Bugfix: The test for `EGL_RGB_BUFFER` was invalid
 
 
 ## Contact
@@ -150,6 +178,7 @@ skills.
  - Lambert Clara
  - Andrew Corrigan
  - Noel Cower
+ - Jason Daly
  - Jarrod Davis
  - Olivier Delannoy
  - Paul R. Deppe
@@ -241,6 +270,7 @@ skills.
  - Arthur Tombs
  - Ioannis Tsakpinis
  - Samuli Tuomola
+ - Matthew Turner
  - urraka
  - Elias Vanderstuyft
  - Jari Vetoniemi

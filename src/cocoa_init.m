@@ -1,7 +1,7 @@
 //========================================================================
-// GLFW 3.3 OS X - www.glfw.org
+// GLFW 3.3 macOS - www.glfw.org
 //------------------------------------------------------------------------
-// Copyright (c) 2009-2016 Camilla Berglund <elmindreda@glfw.org>
+// Copyright (c) 2009-2016 Camilla Löwy <elmindreda@glfw.org>
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
@@ -247,9 +247,6 @@ static GLFWbool initializeTIS(void)
     CFStringRef* kPropertyUnicodeKeyLayoutData =
         CFBundleGetDataPointerForName(_glfw.ns.tis.bundle,
                                       CFSTR("kTISPropertyUnicodeKeyLayoutData"));
-    CFStringRef* kNotifySelectedKeyboardInputSourceChanged =
-        CFBundleGetDataPointerForName(_glfw.ns.tis.bundle,
-                                      CFSTR("kTISNotifySelectedKeyboardInputSourceChanged"));
     _glfw.ns.tis.CopyCurrentKeyboardLayoutInputSource =
         CFBundleGetFunctionPointerForName(_glfw.ns.tis.bundle,
                                           CFSTR("TISCopyCurrentKeyboardLayoutInputSource"));
@@ -261,7 +258,6 @@ static GLFWbool initializeTIS(void)
                                           CFSTR("LMGetKbdType"));
 
     if (!kPropertyUnicodeKeyLayoutData ||
-        !kNotifySelectedKeyboardInputSourceChanged ||
         !TISCopyCurrentKeyboardLayoutInputSource ||
         !TISGetInputSourceProperty ||
         !LMGetKbdType)
@@ -273,8 +269,6 @@ static GLFWbool initializeTIS(void)
 
     _glfw.ns.tis.kPropertyUnicodeKeyLayoutData =
         *kPropertyUnicodeKeyLayoutData;
-    _glfw.ns.tis.kNotifySelectedKeyboardInputSourceChanged =
-        *kNotifySelectedKeyboardInputSourceChanged;
 
     return updateUnicodeDataNS();
 }
@@ -301,10 +295,10 @@ int _glfwPlatformInit(void)
     _glfw.ns.autoreleasePool = [[NSAutoreleasePool alloc] init];
 
     _glfw.ns.listener = [[GLFWLayoutListener alloc] init];
-    [[NSDistributedNotificationCenter defaultCenter]
+    [[NSNotificationCenter defaultCenter]
         addObserver:_glfw.ns.listener
            selector:@selector(selectedKeyboardInputSourceChanged:)
-               name:(__bridge NSString*)kTISNotifySelectedKeyboardInputSourceChanged
+               name:NSTextInputContextKeyboardSelectionDidChangeNotification
              object:nil];
 
 #if defined(_GLFW_USE_CHDIR)
@@ -328,6 +322,7 @@ int _glfwPlatformInit(void)
     _glfwInitTimerNS();
     _glfwInitJoysticksNS();
 
+    _glfwPollMonitorsNS();
     return GLFW_TRUE;
 }
 
@@ -355,11 +350,11 @@ void _glfwPlatformTerminate(void)
 
     if (_glfw.ns.listener)
     {
-        [[NSDistributedNotificationCenter defaultCenter]
+        [[NSNotificationCenter defaultCenter]
             removeObserver:_glfw.ns.listener
-                      name:(__bridge NSString*)kTISNotifySelectedKeyboardInputSourceChanged
+                      name:NSTextInputContextKeyboardSelectionDidChangeNotification
                     object:nil];
-        [[NSDistributedNotificationCenter defaultCenter]
+        [[NSNotificationCenter defaultCenter]
             removeObserver:_glfw.ns.listener];
         [_glfw.ns.listener release];
         _glfw.ns.listener = nil;
@@ -386,9 +381,6 @@ const char* _glfwPlatformGetVersionString(void)
 #endif
 #if defined(_GLFW_USE_MENUBAR)
         " menubar"
-#endif
-#if defined(_GLFW_USE_RETINA)
-        " retina"
 #endif
 #if defined(_GLFW_BUILD_DLL)
         " dynamic"

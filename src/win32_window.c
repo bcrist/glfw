@@ -2,7 +2,7 @@
 // GLFW 3.3 Win32 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
-// Copyright (c) 2006-2016 Camilla Berglund <elmindreda@glfw.org>
+// Copyright (c) 2006-2016 Camilla Löwy <elmindreda@glfw.org>
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
@@ -133,16 +133,16 @@ static HICON createIcon(const GLFWimage* image,
 
     if (!color)
     {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to create RGBA bitmap");
+        _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                             "Win32: Failed to create RGBA bitmap");
         return NULL;
     }
 
     mask = CreateBitmap(image->width, image->height, 1, 1, NULL);
     if (!mask)
     {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to create mask bitmap");
+        _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                             "Win32: Failed to create mask bitmap");
         DeleteObject(color);
         return NULL;
     }
@@ -172,9 +172,15 @@ static HICON createIcon(const GLFWimage* image,
     if (!handle)
     {
         if (icon)
-            _glfwInputError(GLFW_PLATFORM_ERROR, "Win32: Failed to create icon");
+        {
+            _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                                 "Win32: Failed to create icon");
+        }
         else
-            _glfwInputError(GLFW_PLATFORM_ERROR, "Win32: Failed to create cursor");
+        {
+            _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                                 "Win32: Failed to create cursor");
+        }
     }
 
     return handle;
@@ -278,6 +284,26 @@ static void updateClipRect(_GLFWwindow* window)
     }
     else
         ClipCursor(NULL);
+}
+
+// Update native window styles to match attributes
+//
+static void updateWindowStyles(const _GLFWwindow* window)
+{
+    RECT rect;
+    DWORD style = GetWindowLongW(window->win32.handle, GWL_STYLE);
+    style &= ~(WS_OVERLAPPEDWINDOW | WS_POPUP);
+    style |= getWindowStyle(window);
+
+    GetClientRect(window->win32.handle, &rect);
+    AdjustWindowRectEx(&rect, style, FALSE, getWindowExStyle(window));
+    ClientToScreen(window->win32.handle, (POINT*) &rect.left);
+    ClientToScreen(window->win32.handle, (POINT*) &rect.right);
+    SetWindowLongW(window->win32.handle, GWL_STYLE, style);
+    SetWindowPos(window->win32.handle, HWND_TOP,
+                 rect.left, rect.top,
+                 rect.right - rect.left, rect.bottom - rect.top,
+                 SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER);
 }
 
 // Translates a GLFW standard cursor to a resource ID
@@ -407,7 +433,7 @@ static GLFWbool acquireMonitor(_GLFWwindow* window)
                  xpos, ypos, mode.width, mode.height,
                  SWP_NOACTIVATE | SWP_NOCOPYBITS);
 
-    _glfwInputMonitorWindowChange(window->monitor, window);
+    _glfwInputMonitorWindow(window->monitor, window);
     return status;
 }
 
@@ -418,7 +444,7 @@ static void releaseMonitor(_GLFWwindow* window)
     if (window->monitor->window != window)
         return;
 
-    _glfwInputMonitorWindowChange(window->monitor, NULL);
+    _glfwInputMonitorWindow(window->monitor, NULL);
     _glfwRestoreVideoModeWin32(window->monitor);
 }
 
@@ -438,7 +464,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
             {
                 if (wParam == DBT_DEVNODES_CHANGED)
                 {
-                    _glfwInputMonitorChange();
+                    _glfwPollMonitorsWin32();
                     return TRUE;
                 }
                 else if (wParam == DBT_DEVICEARRIVAL)
@@ -668,7 +694,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
         case WM_MOUSEHWHEEL:
         {
             // This message is only sent on Windows Vista and later
-            // NOTE: The X-axis is inverted for consistency with OS X and X11.
+            // NOTE: The X-axis is inverted for consistency with macOS and X11
             _glfwInputScroll(window, -((SHORT) HIWORD(wParam) / (double) WHEEL_DELTA), 0.0);
             return 0;
         }
@@ -886,11 +912,7 @@ static int createNativeWindow(_GLFWwindow* window,
 
     wideTitle = _glfwCreateWideStringFromUTF8Win32(wndconfig->title);
     if (!wideTitle)
-    {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to convert window title to UTF-16");
         return GLFW_FALSE;
-    }
 
     window->win32.handle = CreateWindowExW(exStyle,
                                            _GLFW_WNDCLASSNAME,
@@ -907,7 +929,8 @@ static int createNativeWindow(_GLFWwindow* window,
 
     if (!window->win32.handle)
     {
-        _glfwInputError(GLFW_PLATFORM_ERROR, "Win32: Failed to create window");
+        _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                             "Win32: Failed to create window");
         return GLFW_FALSE;
     }
 
@@ -963,8 +986,8 @@ GLFWbool _glfwRegisterWindowClassWin32(void)
 
     if (!RegisterClassExW(&wc))
     {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to register window class");
+        _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                             "Win32: Failed to register window class");
         return GLFW_FALSE;
     }
 
@@ -1051,11 +1074,7 @@ void _glfwPlatformSetWindowTitle(_GLFWwindow* window, const char* title)
 {
     WCHAR* wideTitle = _glfwCreateWideStringFromUTF8Win32(title);
     if (!wideTitle)
-    {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to convert window title to UTF-16");
         return;
-    }
 
     SetWindowTextW(window->win32.handle, wideTitle);
     free(wideTitle);
@@ -1348,6 +1367,23 @@ int _glfwPlatformWindowMaximized(_GLFWwindow* window)
     return IsZoomed(window->win32.handle);
 }
 
+void _glfwPlatformSetWindowResizable(_GLFWwindow* window, GLFWbool enabled)
+{
+    updateWindowStyles(window);
+}
+
+void _glfwPlatformSetWindowDecorated(_GLFWwindow* window, GLFWbool enabled)
+{
+    updateWindowStyles(window);
+}
+
+void _glfwPlatformSetWindowFloating(_GLFWwindow* window, GLFWbool enabled)
+{
+    const HWND after = enabled ? HWND_TOPMOST : HWND_NOTOPMOST;
+    SetWindowPos(window->win32.handle, after, 0, 0, 0, 0,
+                 SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+}
+
 void _glfwPlatformPollEvents(void)
 {
     MSG msg;
@@ -1533,8 +1569,8 @@ int _glfwPlatformCreateStandardCursor(_GLFWcursor* cursor, int shape)
         CopyCursor(LoadCursorW(NULL, translateCursorShape(shape)));
     if (!cursor->win32.handle)
     {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to create standard cursor");
+        _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                             "Win32: Failed to create standard cursor");
         return GLFW_FALSE;
     }
 
@@ -1561,26 +1597,22 @@ void _glfwPlatformSetClipboardString(_GLFWwindow* window, const char* string)
 
     characterCount = MultiByteToWideChar(CP_UTF8, 0, string, -1, NULL, 0);
     if (!characterCount)
-    {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to convert clipboard string to UTF-16");
         return;
-    }
 
     object = GlobalAlloc(GMEM_MOVEABLE, characterCount * sizeof(WCHAR));
     if (!object)
     {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to allocate global handle for clipboard");
+        _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                             "Win32: Failed to allocate global handle for clipboard");
         return;
     }
 
     buffer = GlobalLock(object);
     if (!buffer)
     {
+        _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                             "Win32: Failed to lock global handle");
         GlobalFree(object);
-
-        _glfwInputError(GLFW_PLATFORM_ERROR, "Win32: Failed to lock global handle");
         return;
     }
 
@@ -1589,9 +1621,9 @@ void _glfwPlatformSetClipboardString(_GLFWwindow* window, const char* string)
 
     if (!OpenClipboard(_glfw.win32.helperWindowHandle))
     {
+        _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                             "Win32: Failed to open clipboard");
         GlobalFree(object);
-
-        _glfwInputError(GLFW_PLATFORM_ERROR, "Win32: Failed to open clipboard");
         return;
     }
 
@@ -1607,42 +1639,34 @@ const char* _glfwPlatformGetClipboardString(_GLFWwindow* window)
 
     if (!OpenClipboard(_glfw.win32.helperWindowHandle))
     {
-        _glfwInputError(GLFW_PLATFORM_ERROR, "Win32: Failed to open clipboard");
+        _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                             "Win32: Failed to open clipboard");
         return NULL;
     }
 
     object = GetClipboardData(CF_UNICODETEXT);
     if (!object)
     {
+        _glfwInputErrorWin32(GLFW_FORMAT_UNAVAILABLE,
+                             "Win32: Failed to convert clipboard to string");
         CloseClipboard();
-
-        _glfwInputError(GLFW_FORMAT_UNAVAILABLE,
-                        "Win32: Failed to convert clipboard to string");
         return NULL;
     }
 
     buffer = GlobalLock(object);
     if (!buffer)
     {
+        _glfwInputErrorWin32(GLFW_PLATFORM_ERROR,
+                             "Win32: Failed to lock global handle");
         CloseClipboard();
-
-        _glfwInputError(GLFW_PLATFORM_ERROR, "Win32: Failed to lock global handle");
         return NULL;
     }
 
     free(_glfw.win32.clipboardString);
-    _glfw.win32.clipboardString =
-        _glfwCreateUTF8FromWideStringWin32(buffer);
+    _glfw.win32.clipboardString = _glfwCreateUTF8FromWideStringWin32(buffer);
 
     GlobalUnlock(object);
     CloseClipboard();
-
-    if (!_glfw.win32.clipboardString)
-    {
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Win32: Failed to convert wide string to UTF-8");
-        return NULL;
-    }
 
     return _glfw.win32.clipboardString;
 }
